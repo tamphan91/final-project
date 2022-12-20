@@ -42,7 +42,6 @@ export default class App extends Component<AppProps, AppState> {
               <Grid.Column width={16}>
                 <Router history={this.props.history}>
                   {this.generateMenu()}
-
                   {this.generateCurrentPage()}
                 </Router>
               </Grid.Column>
@@ -91,7 +90,7 @@ export default class App extends Component<AppProps, AppState> {
         <Route
           path="/"
           exact
-          render={props => {
+          render={(props) => {
             return <Todos {...props} auth={this.props.auth} />
           }}
         />
@@ -99,7 +98,7 @@ export default class App extends Component<AppProps, AppState> {
         <Route
           path="/todos/:todoId/edit"
           exact
-          render={props => {
+          render={(props) => {
             return <EditTodo {...props} auth={this.props.auth} />
           }}
         />

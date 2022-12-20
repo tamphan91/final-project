@@ -43,6 +43,30 @@ export async function patchTodo(
   })
 }
 
+export async function patchTodoAttachment(
+  idToken: string,
+  todoId: string
+): Promise<void> {
+  await Axios.put(`${apiEndpoint}/todos/${todoId}/attachment`, {},{
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${idToken}`
+    }
+  })
+}
+
+export async function removeTodoAttachment(
+  idToken: string,
+  todoId: string
+): Promise<void> {
+  await Axios.delete(`${apiEndpoint}/todos/${todoId}/attachment`,{
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${idToken}`
+    }
+  })
+}
+
 export async function deleteTodo(
   idToken: string,
   todoId: string

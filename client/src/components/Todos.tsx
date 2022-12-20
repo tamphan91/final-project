@@ -11,10 +11,17 @@ import {
   Icon,
   Input,
   Image,
-  Loader
+  Loader,
+  Segment
 } from 'semantic-ui-react'
 
-import { createTodo, deleteTodo, getTodos, patchTodo } from '../api/todos-api'
+import {
+  createTodo,
+  deleteTodo,
+  getTodos,
+  patchTodo,
+  removeTodoAttachment
+} from '../api/todos-api'
 import Auth from '../auth/Auth'
 import { Todo } from '../types/Todo'
 
@@ -25,19 +32,38 @@ interface TodosProps {
 
 interface TodosState {
   todos: Todo[]
+  todosFiltered: Todo[]
   newTodoName: string
+  searchText: string
   loadingTodos: boolean
 }
 
 export class Todos extends React.PureComponent<TodosProps, TodosState> {
   state: TodosState = {
     todos: [],
+    todosFiltered: [],
     newTodoName: '',
+    searchText: '',
     loadingTodos: true
   }
 
   handleNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     this.setState({ newTodoName: event.target.value })
+  }
+
+  handleSearchTextChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.value) {
+      this.setState({
+        todosFiltered: this.state.todos.filter((todo) =>
+          todo.name.includes(event.target.value)
+        )
+      })
+    } else {
+      this.setState({
+        todosFiltered: this.state.todos
+      })
+    }
+    this.setState({ searchText: event.target.value })
   }
 
   onEditButtonClick = (todoId: string) => {
@@ -52,7 +78,8 @@ export class Todos extends React.PureComponent<TodosProps, TodosState> {
         dueDate
       })
       this.setState({
-        todos: [...this.state.todos, newTodo],
+        todos: [newTodo, ...this.state.todos],
+        todosFiltered: [newTodo, ...this.state.todosFiltered],
         newTodoName: ''
       })
     } catch {
@@ -61,13 +88,48 @@ export class Todos extends React.PureComponent<TodosProps, TodosState> {
   }
 
   onTodoDelete = async (todoId: string) => {
-    try {
-      await deleteTodo(this.props.auth.getIdToken(), todoId)
-      this.setState({
-        todos: this.state.todos.filter(todo => todo.todoId !== todoId)
-      })
-    } catch {
-      alert('Todo deletion failed')
+    // eslint-disable-next-line no-restricted-globals
+    if (confirm('Are you sure?')) {
+      try {
+        await deleteTodo(this.props.auth.getIdToken(), todoId)
+        this.setState({
+          todos: this.state.todos.filter((todo) => todo.todoId !== todoId),
+          todosFiltered: this.state.todosFiltered.filter(
+            (todo) => todo.todoId !== todoId
+          )
+        })
+      } catch {
+        alert('Todo deletion failed')
+      }
+    }
+  }
+
+  onRemoveTodoAttachment = async (todoId: string) => {
+    // eslint-disable-next-line no-restricted-globals
+    if (confirm('Are you sure?')) {
+      try {
+        await removeTodoAttachment(this.props.auth.getIdToken(), todoId)
+        this.setState({
+          todos: this.state.todos.map((todo) =>
+            todo.todoId === todoId
+              ? (() => {
+                  delete todo.attachmentUrl
+                  return todo
+                })()
+              : todo
+          ),
+          todosFiltered: this.state.todosFiltered.map((todo) =>
+            todo.todoId === todoId
+              ? (() => {
+                  delete todo.attachmentUrl
+                  return todo
+                })()
+              : todo
+          )
+        })
+      } catch {
+        alert('Todo detachment failed')
+      }
     }
   }
 
@@ -82,6 +144,9 @@ export class Todos extends React.PureComponent<TodosProps, TodosState> {
       this.setState({
         todos: update(this.state.todos, {
           [pos]: { done: { $set: !todo.done } }
+        }),
+        todosFiltered: update(this.state.todosFiltered, {
+          [pos]: { done: { $set: !todo.done } }
         })
       })
     } catch {
@@ -89,11 +154,16 @@ export class Todos extends React.PureComponent<TodosProps, TodosState> {
     }
   }
 
+  clearSearchText = () => {
+    this.setState({ searchText: '', todosFiltered: this.state.todos })
+  }
+
   async componentDidMount() {
     try {
       const todos = await getTodos(this.props.auth.getIdToken())
       this.setState({
         todos,
+        todosFiltered: todos,
         loadingTodos: false
       })
     } catch (e) {
@@ -104,37 +174,54 @@ export class Todos extends React.PureComponent<TodosProps, TodosState> {
   render() {
     return (
       <div>
-        <Header as="h1">TODOs</Header>
+        <Segment basic textAlign="center">
+          <Header as="h1">TODOs</Header>
 
-        {this.renderCreateTodoInput()}
-
+          {this.renderCreateTodoInput()}
+        </Segment>
         {this.renderTodos()}
       </div>
     )
   }
-
   renderCreateTodoInput() {
     return (
-      <Grid.Row>
-        <Grid.Column width={16}>
-          <Input
-            action={{
-              color: 'teal',
-              labelPosition: 'left',
-              icon: 'add',
-              content: 'New task',
-              onClick: this.onTodoCreate
-            }}
-            fluid
-            actionPosition="left"
-            placeholder="To change the world..."
-            onChange={this.handleNameChange}
-          />
-        </Grid.Column>
-        <Grid.Column width={16}>
-          <Divider />
-        </Grid.Column>
-      </Grid.Row>
+      <>
+        <Input
+          icon={
+            this.state.searchText.length > 0 ? (
+              <Icon name="remove" onClick={this.clearSearchText} link />
+            ) : (
+              <Icon name="search" />
+            )
+          }
+          value={this.state.searchText}
+          placeholder="search..."
+          onChange={this.handleSearchTextChange}
+        />
+        <Divider horizontal />
+        <Grid.Row>
+          <Grid.Column width={16}>
+            <Input
+              action={{
+                disabled: this.state.newTodoName === '',
+                color: this.state.newTodoName ? 'teal' : 'grey',
+                labelPosition: 'left',
+                icon: 'add',
+                content: 'New task',
+                onClick: this.onTodoCreate
+              }}
+              fluid
+              value={this.state.newTodoName}
+              actionPosition="left"
+              placeholder="Enter task name..."
+              onChange={this.handleNameChange}
+            />
+          </Grid.Column>
+          <Grid.Column width={16}>
+            <Divider />
+          </Grid.Column>
+        </Grid.Row>
+      </>
     )
   }
 
@@ -159,31 +246,85 @@ export class Todos extends React.PureComponent<TodosProps, TodosState> {
   renderTodosList() {
     return (
       <Grid padded>
-        {this.state.todos.map((todo, pos) => {
+        <Grid.Row>
+          <Grid.Column width={2} verticalAlign="middle">
+            <Header as="h4">DONE</Header>
+          </Grid.Column>
+          <Grid.Column width={3}>
+            <Header as="h4">ATTACHMENT</Header>
+          </Grid.Column>
+          <Grid.Column width={7} verticalAlign="middle">
+            <Header as="h4">NAME</Header>
+          </Grid.Column>
+          <Grid.Column width={2} floated="right" verticalAlign="middle">
+            <Header as="h4">DUE-DATE</Header>
+          </Grid.Column>
+          <Grid.Column width={2} floated="right" verticalAlign="middle">
+            <Header as="h4">ACTION</Header>
+          </Grid.Column>
+          <Grid.Column width={16}>
+            <Divider />
+          </Grid.Column>
+        </Grid.Row>
+        {this.state.todosFiltered.length === 0 && (
+          <Grid.Row>
+            <Grid.Column textAlign="center" width={16}>
+              <Header disabled as="h3">
+                {this.state.searchText.length > 0
+                  ? `Could not find any TODOs for "${this.state.searchText}"`
+                  : 'EMPTY'}
+              </Header>
+            </Grid.Column>
+          </Grid.Row>
+        )}
+        {this.state.todosFiltered.map((todo, pos) => {
           return (
             <Grid.Row key={todo.todoId}>
-              <Grid.Column width={1} verticalAlign="middle">
+              <Grid.Column width={2} verticalAlign="middle">
                 <Checkbox
                   onChange={() => this.onTodoCheck(pos)}
                   checked={todo.done}
                 />
               </Grid.Column>
-              <Grid.Column width={10} verticalAlign="middle">
-                {todo.name}
+              <Grid.Column width={3}>
+                {todo.attachmentUrl && (
+                  <>
+                    <Image
+                      style={{ filter: todo.done ? 'grayscale(100%)' : '' }}
+                      src={todo.attachmentUrl}
+                      size="small"
+                      wrapped
+                    />
+                    {!todo.done && (
+                      <Icon
+                        link
+                        onClick={() => this.onRemoveTodoAttachment(todo.todoId)}
+                        name="remove circle"
+                      />
+                    )}
+                  </>
+                )}
               </Grid.Column>
-              <Grid.Column width={3} floated="right">
+              <Grid.Column width={7} verticalAlign="middle">
+                <span
+                  style={{ textDecoration: todo.done ? 'line-through' : '' }}
+                >
+                  {todo.name}
+                </span>
+              </Grid.Column>
+              <Grid.Column width={2} floated="right" verticalAlign="middle">
                 {todo.dueDate}
               </Grid.Column>
-              <Grid.Column width={1} floated="right">
+              <Grid.Column width={1} floated="right" verticalAlign="middle">
                 <Button
                   icon
                   color="blue"
                   onClick={() => this.onEditButtonClick(todo.todoId)}
                 >
-                  <Icon name="pencil" />
+                  <Icon name="attach" />
                 </Button>
               </Grid.Column>
-              <Grid.Column width={1} floated="right">
+              <Grid.Column width={1} floated="right" verticalAlign="middle">
                 <Button
                   icon
                   color="red"
@@ -192,12 +333,11 @@ export class Todos extends React.PureComponent<TodosProps, TodosState> {
                   <Icon name="delete" />
                 </Button>
               </Grid.Column>
-              {todo.attachmentUrl && (
-                <Image src={todo.attachmentUrl} size="small" wrapped />
+              {pos < this.state.todos.length - 1 && (
+                <Grid.Column width={16}>
+                  <Divider />
+                </Grid.Column>
               )}
-              <Grid.Column width={16}>
-                <Divider />
-              </Grid.Column>
             </Grid.Row>
           )
         })}
