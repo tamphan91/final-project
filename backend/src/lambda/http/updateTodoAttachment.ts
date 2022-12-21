@@ -5,22 +5,22 @@ import * as middy from 'middy'
 import { cors, httpErrorHandler } from 'middy/middlewares'
 
 import { createLogger } from '../../utils/logger'
-import { createAttachmentPresignedUrl } from '../../helpers/attachmentUtils'
+import { getUserId } from '../utils'
+import { updateTodoAttachment } from '../../businessLogic/todos'
 
-const logger = createLogger('attachment')
+const logger = createLogger('Update Todo')
 
 export const handler = middy(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    logger.info('Processing event: ', event)
+    logger.info('Starting update todo attachment', event)
     const todoId = event.pathParameters.todoId
-    const uploadUrl = createAttachmentPresignedUrl(todoId)
-
-    logger.info('Upload url: %s', uploadUrl)
+    const userId: string = getUserId(event)
+    const updatedItem = await updateTodoAttachment(userId, todoId)
 
     return {
-      statusCode: 202,
+      statusCode: 200,
       body: JSON.stringify({
-        uploadUrl
+        item: updatedItem
       })
     }
   }
